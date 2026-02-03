@@ -56,6 +56,8 @@ ARG LIBTORCH_CUDA128_URL
 ARG LIBTORCH_VERSION
 
 ENV LIBTORCH_BYPASS_VERSION_CHECK=1
+# Tell tch-rs to link against CUDA libtorch (matches cu129 in download URL)
+ENV TORCH_CUDA_VERSION=cu129
 
 # Install CUDA repository and runtime libraries (needed for linking)
 RUN wget https://developer.download.nvidia.com/compute/cuda/repos/debian12/x86_64/cuda-keyring_1.1-1_all.deb && \
@@ -86,6 +88,8 @@ ARG LIBTORCH_CUDA130_URL
 ARG LIBTORCH_VERSION
 
 ENV LIBTORCH_BYPASS_VERSION_CHECK=1
+# Tell tch-rs to link against CUDA libtorch
+ENV TORCH_CUDA_VERSION=cu130
 
 # Install CUDA repository and runtime libraries (needed for linking)
 RUN wget https://developer.download.nvidia.com/compute/cuda/repos/debian12/x86_64/cuda-keyring_1.1-1_all.deb && \
@@ -200,6 +204,11 @@ COPY --from=builder /usr/local/cuda-12.8/lib64/libcublasLt.so* /usr/local/cuda/l
 
 # Copy only LibTorch shared libraries (skip static libs, headers, cmake)
 COPY --from=builder /opt/libtorch/lib/*.so* /opt/libtorch/lib/
+
+# Force libtorch_cuda.so to load at runtime
+# Without this, the binary only links libtorch_cpu.so directly (linker --as-needed),
+# and Device::cuda_if_available() fails because CUDA symbols aren't loaded.
+ENV LD_PRELOAD=/opt/libtorch/lib/libtorch_cuda.so
 
 #############################################
 # CUDA 13.0 Runtime

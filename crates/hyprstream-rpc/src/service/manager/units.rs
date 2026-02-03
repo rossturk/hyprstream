@@ -48,10 +48,25 @@ pub fn service_unit(service: &str) -> Result<String> {
     let ld_library_path = std::env::var("LD_LIBRARY_PATH").ok();
     let libtorch = std::env::var("LIBTORCH").ok();
 
+    // When using pip-installed PyTorch, libtorch_cuda.so needs to be preloaded
+    // because the C++ torch::cuda::is_available() doesn't trigger lazy loading
+    // of the CUDA module (Python's torch __init__.py handles this explicitly).
+    let ld_preload = std::env::var("LD_PRELOAD").ok().or_else(|| {
+        libtorch.as_ref().and_then(|lt| {
+            let cuda_lib = std::path::Path::new(lt).join("lib/libtorch_cuda.so");
+            if cuda_lib.exists() {
+                Some(cuda_lib.to_string_lossy().into_owned())
+            } else {
+                None
+            }
+        })
+    });
+
     // Build Environment= directives
     let env_directives = vec![
         ld_library_path.map(|v| format!("Environment=LD_LIBRARY_PATH={v}")),
         libtorch.map(|v| format!("Environment=LIBTORCH={v}")),
+        ld_preload.map(|v| format!("Environment=LD_PRELOAD={v}")),
     ]
     .into_iter()
     .flatten()
