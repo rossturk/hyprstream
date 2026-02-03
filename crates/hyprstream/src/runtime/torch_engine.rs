@@ -2277,9 +2277,28 @@ pub struct TextStream<'a> {
 }
 
 impl<'a> TextStream<'a> {
-    fn new(engine: &'a TorchEngine, request: GenerationRequest) -> Result<Self> {
+    fn new(engine: &'a TorchEngine, mut request: GenerationRequest) -> Result<Self> {
         let prompt_tokens = engine.tokenize(request.prompt.as_str())?;
         let prompt_len = prompt_tokens.len();
+
+        // Enforce context window limit before forward pass
+        let context_length = engine.handle_poison(engine.model_info.lock())?.context_length;
+        if prompt_len >= context_length {
+            return Err(anyhow!(
+                "Prompt length ({} tokens) exceeds model context window ({} tokens)",
+                prompt_len, context_length
+            ));
+        }
+
+        // Clamp max_tokens if prompt + max_tokens exceeds window
+        let available = context_length - prompt_len;
+        if request.max_tokens > available {
+            tracing::warn!(
+                "Clamping max_tokens from {} to {} (prompt {} + max_tokens exceeds context {})",
+                request.max_tokens, available, prompt_len, context_length
+            );
+            request.max_tokens = available;
+        }
 
         let tokenizer = engine.get_tokenizer()?;
         let stop_token_ids: Vec<u32> = request.stop_tokens

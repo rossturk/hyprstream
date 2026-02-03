@@ -393,14 +393,20 @@ async fn chat_completions(
             response
         }
         Err(e) => {
-            error!("Generation failed: {}", e);
+            let error_msg = format!("{}", e);
+            let (status, code) = if error_msg.contains("exceeds model context window") {
+                (StatusCode::BAD_REQUEST, "context_length_exceeded")
+            } else {
+                error!("Generation failed: {}", e);
+                (StatusCode::INTERNAL_SERVER_ERROR, "internal_error")
+            };
             (
-                StatusCode::INTERNAL_SERVER_ERROR,
+                status,
                 Json(serde_json::json!({
                     "error": {
                         "message": format!("Generation failed: {}", e),
                         "type": "generation_error",
-                        "code": "internal_error"
+                        "code": code
                     }
                 })),
             )
@@ -862,13 +868,19 @@ async fn completions(
             response
         }
         Err(e) => {
+            let error_msg = format!("{}", e);
+            let (status, code) = if error_msg.contains("exceeds model context window") {
+                (StatusCode::BAD_REQUEST, "context_length_exceeded")
+            } else {
+                (StatusCode::INTERNAL_SERVER_ERROR, "internal_error")
+            };
             (
-                StatusCode::INTERNAL_SERVER_ERROR,
+                status,
                 Json(serde_json::json!({
                     "error": {
                         "message": format!("Generation failed: {}", e),
                         "type": "generation_error",
-                        "code": "internal_error"
+                        "code": code
                     }
                 })),
             )
